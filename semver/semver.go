@@ -246,7 +246,7 @@ func parseInt(v string) (t, rest string, ok bool) {
 
 func parsePrerelease(v string) (t, rest string, ok bool) {
 	// "A pre-release version MAY be denoted by appending a hyphen and
-	// a series of dot separated identifiers immediately following the patch version.
+	// a series of dot-separated identifiers immediately following the patch version.
 	// Identifiers MUST comprise only ASCII alphanumerics and hyphen [0-9A-Za-z-].
 	// Identifiers MUST NOT be empty. Numeric identifiers MUST NOT include leading zeroes."
 	if v == "" || v[0] != '-' {
@@ -328,9 +328,9 @@ func compareInt(x, y string) int {
 	}
 	if x < y {
 		return -1
-	} else {
-		return +1
 	}
+
+	return +1
 }
 
 func comparePrerelease(x, y string) int {
@@ -340,11 +340,11 @@ func comparePrerelease(x, y string) int {
 	// Precedence for two pre-release versions with the same major, minor,
 	// and patch version MUST be determined by comparing each dot separated
 	// identifier from left to right until a difference is found as follows:
-	// identifiers consisting of only digits are compared numerically and
+	// identifiers consisting of only digits are compared numerically, and
 	// identifiers with letters or hyphens are compared lexically in ASCII
 	// sort order. Numeric identifiers always have lower precedence than
 	// non-numeric identifiers. A larger set of pre-release fields has a
-	// higher precedence than a smaller set, if all of the preceding
+	// higher precedence than a smaller set if all the preceding
 	// identifiers are equal.
 	// Example: 1.0.0-alpha < 1.0.0-alpha.1 < 1.0.0-alpha.beta <
 	// 1.0.0-beta < 1.0.0-beta.2 < 1.0.0-beta.11 < 1.0.0-rc.1 < 1.0.0."
@@ -369,9 +369,9 @@ func comparePrerelease(x, y string) int {
 			if ix != iy {
 				if ix {
 					return -1
-				} else {
-					return +1
 				}
+
+				return +1
 			}
 			if ix {
 				if len(dx) < len(dy) {
@@ -383,16 +383,16 @@ func comparePrerelease(x, y string) int {
 			}
 			if dx < dy {
 				return -1
-			} else {
-				return +1
 			}
+
+			return +1
 		}
 	}
 	if x == "" {
 		return -1
-	} else {
-		return +1
 	}
+
+	return +1
 }
 
 func nextIdent(x string) (dx, rest string) {
