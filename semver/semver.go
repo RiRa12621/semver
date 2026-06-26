@@ -3,12 +3,10 @@
 // license that can be found in the LICENSE file.
 
 // Package semver implements comparison of semantic version strings.
-// In this package, semantic version strings must begin with a leading "v",
-// as in "v1.0.0".
 //
 // The general form of a semantic version string accepted by this package is
 //
-//	vMAJOR[.MINOR[.PATCH[-PRERELEASE][+BUILD]]]
+//	MAJOR[.MINOR[.PATCH[-PRERELEASE][+BUILD]]]
 //
 // where square brackets indicate optional parts of the syntax;
 // MAJOR, MINOR, and PATCH are decimal integers without extra leading zeros;
@@ -17,9 +15,8 @@
 // all-numeric PRERELEASE identifiers must not have leading zeros.
 //
 // This package follows Semantic Versioning 2.0.0 (see semver.org)
-// with two exceptions. First, it requires the "v" prefix. Second, it recognizes
-// vMAJOR and vMAJOR.MINOR (with no prerelease or build suffixes)
-// as shorthands for vMAJOR.0.0 and vMAJOR.MINOR.0.
+// with one exception. It recognizes MAJOR and MAJOR.MINOR (with no prerelease
+// or build suffixes) as shorthands for MAJOR.0.0 and MAJOR.MINOR.0.
 package semver
 
 import (
@@ -63,25 +60,25 @@ func Canonical(v string) string {
 }
 
 // Major returns the major version prefix of the semantic version v.
-// For example, Major("v2.1.0") == "v2".
+// For example, Major("2.1.0") == "2".
 // If v is an invalid semantic version string, Major returns the empty string.
 func Major(v string) string {
 	pv, ok := parse(v)
 	if !ok {
 		return ""
 	}
-	return v[:1+len(pv.major)]
+	return v[:len(pv.major)]
 }
 
 // MajorMinor returns the major.minor version prefix of the semantic version v.
-// For example, MajorMinor("v2.1.0") == "v2.1".
+// For example, MajorMinor("2.1.0") == "2.1".
 // If v is an invalid semantic version string, MajorMinor returns the empty string.
 func MajorMinor(v string) string {
 	pv, ok := parse(v)
 	if !ok {
 		return ""
 	}
-	i := 1 + len(pv.major)
+	i := len(pv.major)
 	if j := i + 1 + len(pv.minor); j <= len(v) && v[i] == '.' && v[i+1:j] == pv.minor {
 		return v[:j]
 	}
@@ -89,7 +86,7 @@ func MajorMinor(v string) string {
 }
 
 // Prerelease returns the prerelease suffix of the semantic version v.
-// For example, Prerelease("v2.1.0-pre+meta") == "-pre".
+// For example, Prerelease("2.1.0-pre+meta") == "-pre".
 // If v is an invalid semantic version string, Prerelease returns the empty string.
 func Prerelease(v string) string {
 	pv, ok := parse(v)
@@ -100,7 +97,7 @@ func Prerelease(v string) string {
 }
 
 // Build returns the build suffix of the semantic version v.
-// For example, Build("v2.1.0+meta") == "+meta".
+// For example, Build("2.1.0+meta") == "+meta".
 // If v is an invalid semantic version string, Build returns the empty string.
 func Build(v string) string {
 	pv, ok := parse(v)
@@ -176,10 +173,10 @@ func compareVersion(a, b string) int {
 }
 
 func parse(v string) (p parsed, ok bool) {
-	if v == "" || v[0] != 'v' {
+	if v == "" {
 		return
 	}
-	p.major, v, ok = parseInt(v[1:])
+	p.major, v, ok = parseInt(v)
 	if !ok {
 		return
 	}
