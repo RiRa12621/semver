@@ -1,0 +1,158 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    name: Go
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: false
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test -race ./...
+
+  release:
+    name: Tag and release
+    needs: test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Compute next version
+        id: next
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git fetch --force --tags
+
+          latest_tag="$(git tag --merged HEAD --list 'v*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1 || true)"
+          if [[ -z "$latest_tag" ]]; then
+            latest_version="0.0.0"
+            range_args=()
+            since="the start of history"
+          else
+            latest_version="${latest_tag#v}"
+            range_args=("${latest_tag}..HEAD")
+            since="$latest_tag"
+          fi
+
+          breaking_subject_re='^[a-zA-Z][a-zA-Z0-9-]*(\([^)]*\))?!:'
+          feature_re='^feat(\([^)]*\))?:'
+          patch_re='^(fix|perf)(\([^)]*\))?:'
+
+          bump="none"
+          while IFS= read -r commit; do
+            message="$(git log -1 --format=%B "$commit")"
+            subject="${message%%$'\n'*}"
+
+            if grep -Eq '(^|[[:space:]])BREAKING[ -]CHANGE:' <<< "$message" || [[ "$subject" =~ $breaking_subject_re ]]; then
+              bump="major"
+              break
+            fi
+
+            if [[ "$subject" =~ $feature_re ]]; then
+              if [[ "$bump" == "none" || "$bump" == "patch" ]]; then
+                bump="minor"
+              fi
+              continue
+            fi
+
+            if [[ "$subject" =~ $patch_re ]]; then
+              if [[ "$bump" == "none" ]]; then
+                bump="patch"
+              fi
+            fi
+          done < <(git log --format='%H' "${range_args[@]}")
+
+          if [[ "$bump" == "none" ]]; then
+            echo "No release-worthy Conventional Commits found since $since."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [[ ! "$latest_version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            echo "Latest tag $latest_tag is not a supported SemVer tag." >&2
+            exit 1
+          fi
+
+          major=$((10#${BASH_REMATCH[1]}))
+          minor=$((10#${BASH_REMATCH[2]}))
+          patch=$((10#${BASH_REMATCH[3]}))
+
+          case "$bump" in
+            major)
+              major=$((major + 1))
+              minor=0
+              patch=0
+              ;;
+            minor)
+              minor=$((minor + 1))
+              patch=0
+              ;;
+            patch)
+              patch=$((patch + 1))
+              ;;
+          esac
+
+          version="${major}.${minor}.${patch}"
+          tag="v${version}"
+
+          if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
+            echo "Tag ${tag} already exists." >&2
+            exit 1
+          fi
+
+          {
+            echo "## ${tag}"
+            echo
+            echo "Changes since ${since}:"
+            echo
+            git log --no-merges --format='- %s (%h)' "${range_args[@]}"
+          } > release-notes.md
+
+          {
+            echo "release=true"
+            echo "bump=${bump}"
+            echo "version=${version}"
+            echo "tag=${tag}"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "Next release: ${tag} (${bump})"
+
+      - name: Create GitHub release
+        if: steps.next.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ steps.next.outputs.tag }}" \
+            --target "$GITHUB_SHA" \
+            --title "${{ steps.next.outputs.tag }}" \
+            --notes-file release-notes.md
